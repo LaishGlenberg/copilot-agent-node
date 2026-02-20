@@ -184,18 +184,3 @@ try {
   await client.stop();
   process.exit(0);
 }
-
-/* await step(
-      "navigate",
-      'Call the MCP tool "puppeteer_navigate" with {"url":"https://example.com"} and reply "ok".'
-    );
-
-    await step(
-      "screenshot",
-      `Call "puppeteer_screenshot" with {"name":"example-home","fullPage":true,"encoded":false} Then, use the filesystem "write_file" tool to save the image to "${screenshotPathJson}". DO NOT OUTPUT ANY BASE64`
-    );
-
-    await step(
-      "evaluate",
-      'Call the MCP tool "puppeteer_evaluate" with {"script":"document.documentElement.outerHTML.slice(0,2000)"} and reply with the result.'
-    ); */
