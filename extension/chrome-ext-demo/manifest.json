@@ -1,0 +1,19 @@
+{
+  "manifest_version": 3,
+  "name": "MCP Browser Bridge",
+  "version": "0.1",
+  "permissions": [
+    "tabs",
+    "scripting",
+    "storage"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html"
+  }
+}

@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+<body>
+    <h1>Simple Focus Test</h1>
+    <p>Open console (F12) and switch tabs/windows</p>
+    <div style="height: 1500px; background: #f0f0f0;"></div>
+    
+    <script>
+        console.log("=== Tab Monitor Test ===");
+        console.log("Initial focus:", document.hasFocus());
+        console.log("Initial visibility:", document.visibilityState);
+        
+        // Track events
+        window.addEventListener('focus', () => {
+            console.log("✅ Tab GAINED focus");
+        });
+        
+        window.addEventListener('blur', () => {
+            console.log("❌ Tab LOST focus");
+        });
+        
+        document.addEventListener('visibilitychange', () => {
+            console.log("👁 Visibility changed to:", document.visibilityState);
+        });
+        
+        // Try to detect activity when not focused
+        document.addEventListener('mousemove', (e) => {
+            if (!document.hasFocus()) {
+                console.log("Mouse moved while UNFOCUSED:", e.clientX, e.clientY);
+            }
+        });
+        
+        window.addEventListener('scroll', () => {
+            if (!document.hasFocus()) {
+                console.log("Scrolled while UNFOCUSED:", window.scrollY);
+            }
+        });
+        
+        // Periodic logging
+        let counter = 0;
+        setInterval(() => {
+            counter++;
+            console.log(`Timer ${counter}: Focused=${document.hasFocus()}, Visible=${document.visibilityState}`);
+        }, 2000);
+    </script>
+</body>
+</html>
