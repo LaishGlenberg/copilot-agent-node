@@ -25,14 +25,14 @@ const client = new CopilotClient({ logLevel: "debug" });
 const rl = readline.createInterface({ input, output }); // 2. Create interface
 
 const session = await client.createSession({
-  model: "gpt-4.1",
+  model: "claude-haiku-4.5", //claude-haiku-4.5
   /* provider: {
     type: "openai",
     baseUrl: "https://api.openai.com/v1",
     apiKey: OPENAI_API_KEY,
   }, */
-  mcpServers: {
-    /* everything: {
+  /* mcpServers: {
+    everything: {
       type: "stdio",
       command: npxCmd,
       args: ["-y", "@modelcontextprotocol/server-puppeteer"],
@@ -52,22 +52,23 @@ const session = await client.createSession({
       command: npxCmd,
       args: ["-y", "@modelcontextprotocol/server-filesystem", process.cwd()],
       tools: ["*"],
-    }, */
-    /* playwright: {
+    },
+    playwright: {
       type: "stdio",
       command: npxCmd,
       args: ["-y", "@playwright/mcp@latest"],
       tools: ["*"]
-    }, */
+    }, 
     browser_extension: {
       type: "stdio",
       command: "node",
       args: [path.resolve("extension", "server-scripts", "full-mcp-server.js")],
       tools: ["browser_get_text", "browser_wait_ready", "browser_list_tabs"]
     },
-  },
+  }, */
   systemMessage: {
-    content: "You are a browser automation assistant",
+    mode: "replace",
+    content: "You are a help cybersecurity question answering assistant",
   },
   onPermissionRequest: (req) => {
     if (req.kind === "mcp") return { kind: "approved" };
@@ -117,6 +118,14 @@ session.on((event) => {
     /* case "assistant.usage":
       console.log(`\n[usage]\n${JSON.stringify(event.data, null, 2)}`);
       return; */
+    case "assistant.usage":
+            const { model, inputTokens, cacheReadTokens, duration, quotaSnapshots } = event.data as any;
+            //checkPremiumReqs(premium_interactions)
+
+            console.log(`\n[usage] model=${model} inputTokens=${inputTokens} cacheReadTokens=${cacheReadTokens} duration=${duration}\n`);
+            //console.log('model: ', event.data.model);
+            //console.log(JSON.stringify(event.data, null, 2))
+            return;
 
     default:
       // Useful to see what else comes through (kept concise)
@@ -127,11 +136,11 @@ session.on((event) => {
   }
 });
 
-async function ask(prompt: string, timeoutMs = 120_000) {
-  return session.sendAndWait({ prompt }, timeoutMs);
+async function ask(prompt: string, attachments?: any[], timeoutMs = 120_000) {
+  return session.sendAndWait({ prompt, attachments }, timeoutMs);
 }
 
-async function step(name: string, prompt: string, timeoutMs = 120_000) {
+async function step(name: string, prompt: string, timeoutMs: any = 120_000) {
   console.log(`\n=== Step: ${name} ===`);
   try {
     await ask(prompt, timeoutMs);
@@ -143,7 +152,7 @@ async function step(name: string, prompt: string, timeoutMs = 120_000) {
 // --- Remote Control Server Setup ---
 const app = express();
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
 
 const SECRET = "mysecret123";
 let busy = false;
@@ -170,6 +179,8 @@ app.get("/", (_, res) => {
         <input id="token" type="password" value="${SECRET}" />
         <label>Prompt:</label>
         <textarea id="cmd" placeholder="e.g. Go to github.com and find the latest news"></textarea>
+        <label>Image (optional):</label>
+        <input id="imageFile" type="file" accept="image/*" />
         <div class="checkbox-container">
           <input type="checkbox" id="clearCheckbox" checked>
           <label for="clearCheckbox">Clear prompt after sending</label>
@@ -180,14 +191,28 @@ app.get("/", (_, res) => {
           async function send() {
             const prompt = document.getElementById("cmd").value;
             const token = document.getElementById("token").value;
+            const fileInput = document.getElementById("imageFile");
             const out = document.getElementById("out");
             const shouldClear = document.getElementById("clearCheckbox").checked;
             
             if (!prompt) return alert("Please enter a prompt");
             
+            let imageData = null;
+
+            // Convert image to Base64 if a file is selected
+            if (fileInput.files.length > 0) {
+              const file = fileInput.files[0];
+              imageData = await new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result.split(',')[1]); // Get base64 part only
+                reader.readAsDataURL(file);
+              });
+            }
+
             // Clear the prompt box if checkbox is checked
             if (shouldClear) {
               document.getElementById("cmd").value = "";
+              document.getElementById("imageFile").value = "";
             }
             
             out.textContent = "⏳ Agent is processing... Check your computer terminal for logs.";
@@ -195,7 +220,7 @@ app.get("/", (_, res) => {
               const res = await fetch("/prompt", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ prompt, token })
+                body: JSON.stringify({ prompt, token, image: imageData })
               });
               const data = await res.json();
               out.textContent = JSON.stringify(data, null, 2);
@@ -210,7 +235,7 @@ app.get("/", (_, res) => {
 });
 
 app.post("/prompt", async (req, res) => {
-  const { prompt, token } = req.body;
+  const { prompt, token, image } = req.body;
 
   if (token !== SECRET) {
     return res.status(403).json({ error: "Unauthorized" });
@@ -226,9 +251,18 @@ app.post("/prompt", async (req, res) => {
 
   try {
     busy = true;
-    console.log(`\n[REMOTE PROMPT RECEIVED]\n${prompt}`);
+    console.log(`\n[REMOTE PROMPT RECEIVED]\n${prompt}${image ? " (with image)" : ""}`);
     
-    const result = await ask(prompt);
+    let attachments = undefined;
+    if (image) {
+      attachments = [{
+        type: "blob",
+        data: image,
+        mimeType: "image/png"
+      }];
+    }
+
+    const result = await ask(prompt, attachments);
 
     busy = false;
     res.json({
@@ -251,13 +285,31 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`Access the UI locally at http://localhost:${PORT}`);
 });
 
-//192.168.1.16:3000
+// 1. Define a shared cleanup function
+const cleanup = async () => {
+  console.log("\n[Shutdown] Cleaning up connections...");
+  rl.close();
+  try {
+    await session.disconnect();
+    await client.stop();
+    console.log("[Shutdown] Success.");
+  } catch (err: any) {
+    console.error(`[Shutdown Error]: ${err.message}`);
+  }
+  process.exit(0);
+};
+
+// 2. Listen for the Ctrl+C signal
+process.on('SIGINT', cleanup);
+
+//192.168.1.18:3000
 try {
   console.log(`\n=== Browser Extention MCP Playground (${scenario}) ===\n`);
-  step(
+  /* step(
       "Verify extension and MCP connection",
       "Call the browser_wait_ready tool to ensure the extension is connected before proceeding."
-    );
+    ); */
+
 
   if (scenario === "server") {
     console.log("Server mode active. Waiting for remote commands...");
@@ -291,7 +343,7 @@ try {
 
 } finally {
   rl.close(); // 5. Clean up
-  await session.destroy();
+  await session.disconnect();
   await client.stop();
   process.exit(0);
 }
